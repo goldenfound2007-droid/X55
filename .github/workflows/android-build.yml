@@ -1,0 +1,59 @@
+name: Build InstaSaver APK
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Restore source project
+        run: |
+          mkdir -p work
+          base64 -d source.tar.gz.b64 | tar -xz -C work
+          find work/InstaSaver_Android_Project -maxdepth 2 -type f | sort
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android packages
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: 8.9
+
+      - name: Build APK
+        working-directory: work/InstaSaver_Android_Project
+        run: gradle --no-daemon --stacktrace assembleDebug
+
+      - name: Prepare artifact
+        run: |
+          mkdir -p release
+          cp work/InstaSaver_Android_Project/app/build/outputs/apk/debug/app-debug.apk release/InstaSaver.apk
+          ls -lh release/InstaSaver.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: InstaSaver.apk
+          path: release/InstaSaver.apk
+          if-no-files-found: error
