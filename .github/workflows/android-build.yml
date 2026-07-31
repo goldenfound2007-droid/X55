@@ -24,6 +24,12 @@ jobs:
           base64 -d source.tar.gz.b64 | tar -xz -C work
           find work/InstaSaver_Android_Project -maxdepth 2 -type f | sort
 
+      - name: Apply optional source patch
+        run: |
+          if [ -f patch_source.sh ]; then
+            bash patch_source.sh
+          fi
+
       - name: Set up Java
         uses: actions/setup-java@v4
         with:
