@@ -34,33 +34,6 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.9'
-      - name: Fix QR join keyboard and bump version
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-          app = Path("work/SborishcheAndroidHost/app/src/main/assets/www/app.js")
-          src = app.read_text(encoding="utf-8")
-          old = "async function refresh(force=false){if(!key&&role==='host')return hostPage();if(role!=='host'&&!token){header();role==='player'?playerJoin():canvasJoin();return;}"
-          new = """// Keep Android input elements alive during room polling.
-          function isEditingText(){const e=document.activeElement;return !!(e && (e.matches?.('input:not([type=button]):not([type=submit]):not([type=file]),textarea') || e.isContentEditable));}
-          async function refresh(force=false){
-           if(!force && isEditingText())return;
-           if(!key&&role==='host')return hostPage();
-           if(role!=='host'&&!token){
-            if(!document.getElementById('joinName')){header();role==='player'?playerJoin():canvasJoin();}
-            return;
-           }"""
-          if old not in src:
-              raise SystemExit("Expected unpatched join-refresh function not found")
-          app.write_text(src.replace(old, new, 1), encoding="utf-8")
-          gradle = Path("work/SborishcheAndroidHost/app/build.gradle")
-          s = gradle.read_text(encoding="utf-8")
-          import re
-          s = re.sub(r'versionCode\s+\d+', 'versionCode 103', s)
-          s = re.sub(r"versionName\s+'[^']+'", "versionName '1.0.3'", s)
-          gradle.write_text(s, encoding="utf-8")
-          print("QR join form and input-focus fix applied, version 1.0.3")
-          PY
       - name: Build debug APK
         working-directory: work/SborishcheAndroidHost
         run: gradle --no-daemon --stacktrace :app:assembleDebug
@@ -68,12 +41,12 @@ jobs:
         run: |
           test -s work/SborishcheAndroidHost/app/build/outputs/apk/debug/app-debug.apk
           mkdir -p release
-          cp work/SborishcheAndroidHost/app/build/outputs/apk/debug/app-debug.apk release/SBORISHCHE_ANDROID_HOST_v1.0.3_debug.apk
+          cp work/SborishcheAndroidHost/app/build/outputs/apk/debug/app-debug.apk release/SBORISHCHE_ANDROID_HOST_v1.1.0_debug.apk
           sha256sum release/*.apk
       - name: Upload installable Android APK
         uses: actions/upload-artifact@v4
         with:
-          name: SBORISHCHE-APK-v1.0.3
+          name: SBORISHCHE-APK-v1.1.0
           path: release/*.apk
           if-no-files-found: error
           retention-days: 30
