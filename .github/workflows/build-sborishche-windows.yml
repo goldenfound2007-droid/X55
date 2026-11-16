@@ -26,10 +26,19 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw "C# compilation failed" }
           if (-not (Test-Path release/SBORISHCHE_UPDATE_CENTER.exe)) { throw "Compiled EXE missing" }
           Get-Item release/SBORISHCHE_UPDATE_CENTER.exe | Select-Object Name,Length
+          Copy-Item sborishche/windows-updater/SBORISHCHE_UPDATE_CENTER.cs release/SBORISHCHE_UPDATE_CENTER.cs
+      - name: Windows launch smoke test
+        shell: pwsh
+        run: |
+          $p = Start-Process -FilePath (Resolve-Path release/SBORISHCHE_UPDATE_CENTER.exe).Path -PassThru
+          Start-Sleep -Seconds 2
+          $p.Refresh()
+          if ($p.HasExited) { throw "Updater exited immediately (exit code $($p.ExitCode))" }
+          Stop-Process -Id $p.Id -Force
       - name: Upload tested portable Windows application
         uses: actions/upload-artifact@v4
         with:
           name: SBORISHCHE-WINDOWS-UPDATE-CENTER
-          path: release/SBORISHCHE_UPDATE_CENTER.exe
+          path: release/*
           if-no-files-found: error
           retention-days: 30
