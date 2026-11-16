@@ -1,0 +1,33 @@
+name: Build SBORISHCHE Windows Update Center
+on:
+  push:
+    branches:
+      - sborishche-windows-update-center-v1
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows-exe:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout Windows source
+        uses: actions/checkout@v4
+      - name: Compile portable Windows EXE
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force release | Out-Null
+          $compiler = Join-Path $env:WINDIR "Microsoft.NET\Framework\v4.0.30319\csc.exe"
+          if (-not (Test-Path $compiler)) { $compiler = Join-Path $env:WINDIR "Microsoft.NET\Framework64\v4.0.30319\csc.exe" }
+          if (-not (Test-Path $compiler)) { throw "Built-in .NET Framework C# compiler missing" }
+          & $compiler /nologo /codepage:65001 /target:winexe /platform:anycpu /out:release/SBORISHCHE_UPDATE_CENTER.exe /r:System.dll /r:System.Core.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll /r:System.Web.Extensions.dll /r:System.IO.Compression.dll /r:System.IO.Compression.FileSystem.dll sborishche/windows-updater/SBORISHCHE_UPDATE_CENTER.cs
+          if ($LASTEXITCODE -ne 0) { throw "C# compilation failed" }
+          if (-not (Test-Path release/SBORISHCHE_UPDATE_CENTER.exe)) { throw "Compiled EXE missing" }
+          Get-Item release/SBORISHCHE_UPDATE_CENTER.exe | Select-Object Name,Length
+      - name: Upload tested portable Windows application
+        uses: actions/upload-artifact@v4
+        with:
+          name: SBORISHCHE-WINDOWS-UPDATE-CENTER
+          path: release/SBORISHCHE_UPDATE_CENTER.exe
+          if-no-files-found: error
+          retention-days: 30
