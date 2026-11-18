@@ -45,30 +45,47 @@ jobs:
             return '<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="-2 -2 28 28"><g fill="#171e2d">'+inner+'</g></svg>'
           cards=[]
           skipped=[]
+          used=set()
+          def add_brand(sector,name,slug):
+            if slug in used: return False
+            file=source/(slug+'.svg')
+            if not file.exists():
+              skipped.append(slug)
+              return False
+            original_svg=file.read_text(encoding='utf-8')
+            match=re.search(r'<path\b[^>]*\bd="([^"]+)"',original_svg)
+            if not match:
+              skipped.append(slug)
+              return False
+            used.add(slug)
+            d=match.group(1)
+            idx=len(cards)
+            original=render(d)
+            bad=render(d,edits[idx%len(edits)][1])
+            correct='left' if idx%2==0 else 'right'
+            opaque=hashlib.sha256(slug.encode()).hexdigest()[:12]
+            left='assets/'+opaque+'_a.svg'
+            right='assets/'+opaque+'_b.svg'
+            (out/left).write_text(original if correct=='left' else bad,encoding='utf-8')
+            (out/right).write_text(original if correct=='right' else bad,encoding='utf-8')
+            cards.append({'id':'L100_'+str(idx+1).zfill(3),'brand':name,'slug':slug,'sector':sector,'difficulty':'hard' if idx%5==0 else 'medium' if idx%3==0 else 'easy','question':'Какой логотип нарисован без ошибки?','submode':'logo_spot_the_correct_one','left':left,'right':right,'correct_side':correct,'error_explanation':edits[idx%len(edits)][0],'source':'simple-icons@16.38.0','source_url':'https://github.com/simple-icons/simple-icons/blob/v16.38.0/icons/'+slug+'.svg','verified':'source imported; altered automatically; human QA pending'})
+            return True
           for sector,raw in pools.items():
-            count=0
+            selected_this_sector=0
             for item in raw.split(','):
-              if count==20: break
+              if selected_this_sector>=20: break
               name,slug=item.split('|')
-              f=source/(slug+'.svg')
-              if not f.exists(): skipped.append(slug); continue
-              rawsvg=f.read_text(encoding='utf-8')
-              match=re.search(r'<path\b[^>]*\bd="([^"]+)"',rawsvg)
-              if not match: skipped.append(slug); continue
-              d=match.group(1)
-              idx=len(cards)
-              original=render(d)
-              bad=render(d,edits[idx%len(edits)][1])
-              correct='left' if idx%2==0 else 'right'
-              opaque=hashlib.sha256(slug.encode()).hexdigest()[:12]
-              left='assets/'+opaque+'_a.svg'
-              right='assets/'+opaque+'_b.svg'
-              (out/left).write_text(original if correct=='left' else bad,encoding='utf-8')
-              (out/right).write_text(original if correct=='right' else bad,encoding='utf-8')
-              cards.append({'id':'L100_'+str(idx+1).zfill(3),'brand':name,'slug':slug,'sector':sector,'difficulty':'hard' if idx%5==0 else 'medium' if idx%3==0 else 'easy','question':'Какой логотип нарисован без ошибки?','submode':'logo_spot_the_correct_one','left':left,'right':right,'correct_side':correct,'error_explanation':edits[idx%len(edits)][0],'source':'simple-icons@16.38.0','source_url':'https://github.com/simple-icons/simple-icons/blob/v16.38.0/icons/'+slug+'.svg','verified':'source imported; altered automatically; human QA pending'})
-              count+=1
-            if count!=20: raise RuntimeError('Only '+str(count)+' logos found in '+sector)
-          if len(cards)!=100: raise RuntimeError('Expected 100 cards')
+              if add_brand(sector,name,slug):
+                selected_this_sector+=1
+            print('SECTOR',sector,selected_this_sector)
+          if len(cards)<100:
+            for sector,raw in pools.items():
+              if len(cards)>=100: break
+              for item in raw.split(','):
+                if len(cards)>=100: break
+                name,slug=item.split('|')
+                add_brand(sector,name,slug)
+          if len(cards)!=100: raise RuntimeError('Expected 100 distinct logo assets, got '+str(len(cards)))
           (out/'cards.json').write_text(json.dumps({'schema':'logo-visual-qa-1','cards':cards,'skipped':skipped},indent=2,ensure_ascii=False),encoding='utf-8')
           keys=['id','brand','sector','difficulty','left','right','correct_side','error_explanation','source_url','verified']
           with (out/'cards.csv').open('w',encoding='utf-8-sig',newline='') as f:
