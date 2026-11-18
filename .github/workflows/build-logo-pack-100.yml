@@ -1,0 +1,86 @@
+name: Build SBORISHCHE 100 Visual Logos
+on:
+  push:
+    branches: [sborishche-logo-pack-100-v1]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  create-pack:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Download pinned authentic brand vectors
+        run: npm install --no-save --ignore-scripts simple-icons@16.38.0
+      - name: Generate 100 logo comparison pairs
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re, json, csv, hashlib, collections
+          source=Path('node_modules/simple-icons/icons')
+          out=Path('release/LOGOS_100')
+          assets=out/'assets'
+          assets.mkdir(parents=True,exist_ok=True)
+          pools={
+          'technology':'Apple|apple,Samsung|samsung,Xiaomi|xiaomi,Huawei|huawei,Sony|sony,LG|lg,Google|google,Microsoft|microsoft,Windows|windows,Intel|intel,AMD|amd,NVIDIA|nvidia,ASUS|asus,Acer|acer,Lenovo|lenovo,HP|hp,Dell|dell,Canon|canon,Nikon|nikon,GoPro|gopro,PlayStation|playstation,Xbox|xbox,Nintendo|nintendo,Steam|steam,Discord|discord,Logitech|logitech,Philips|philips,Razer|razer',
+          'apps':'YouTube|youtube,TikTok|tiktok,Telegram|telegram,WhatsApp|whatsapp,Instagram|instagram,Facebook|facebook,Pinterest|pinterest,Reddit|reddit,Snapchat|snapchat,Twitch|twitch,LinkedIn|linkedin,Netflix|netflix,Spotify|spotify,Amazon|amazon,eBay|ebay,AliExpress|aliexpress,Uber|uber,Airbnb|airbnb,PayPal|paypal,Mastercard|mastercard,Visa|visa,GitHub|github,GitLab|gitlab,Docker|docker,Slack|slack,Zoom|zoom,Dropbox|dropbox,Adobe|adobe,Figma|figma,Notion|notion',
+          'cars':'BMW|bmw,Mercedes-Benz|mercedesbenz,Audi|audi,Volkswagen|volkswagen,Toyota|toyota,Honda|honda,Nissan|nissan,Mazda|mazda,Lexus|lexus,Porsche|porsche,Ferrari|ferrari,Lamborghini|lamborghini,Tesla|tesla,Volvo|volvo,Renault|renault,Peugeot|peugeot,Skoda|skoda,Kia|kia,Hyundai|hyundai,Ford|ford,Chevrolet|chevrolet,Jeep|jeep,Subaru|subaru,Mitsubishi|mitsubishi,MINI|mini,Land Rover|landrover,Bentley|bentley',
+          'sport':'Nike|nike,Adidas|adidas,Puma|puma,Reebok|reebok,New Balance|newbalance,Under Armour|underarmour,Levis|levis,Zara|zara,H&M|hm,Uniqlo|uniqlo,Gucci|gucci,Prada|prada,Louis Vuitton|louisvuitton,Chanel|chanel,Dior|dior,Balenciaga|balenciaga,Lacoste|lacoste,Converse|converse,Vans|vans,Crocs|crocs,Columbia|columbia,The North Face|thenorthface,Jordan|jordan,Fila|fila,Tommy Hilfiger|tommyhilfiger,Calvin Klein|calvinklein,Patagonia|patagonia',
+          'food':'McDonalds|mcdonalds,Burger King|burgerking,KFC|kfc,Subway|subway,Starbucks|starbucks,Coca-Cola|cocacola,Pepsi|pepsi,Fanta|fanta,Sprite|sprite,Red Bull|redbull,Lays|lays,Pringles|pringles,Oreo|oreo,KitKat|kitkat,Snickers|snickers,Twix|twix,Lipton|lipton,Nescafe|nescafe,Nestle|nestle,Heinz|heinz,Milka|milka,Haribo|haribo,Doritos|doritos,Dominos|dominos,Pizza Hut|pizzahut,Dunkin|dunkin,Taco Bell|tacobell'
+          }
+          edits=[
+          ('Знак повернут на неверный угол','rotate(12 12 12)'),
+          ('Знак слишком широкий','translate(12 12) scale(1.20 0.96) translate(-12 -12)'),
+          ('Неверный наклон элемента','translate(12 12) skewX(13) translate(-12 -12)'),
+          ('Знак слишком высокий','translate(12 12) scale(0.96 1.20) translate(-12 -12)'),
+          ('Знак перекошен влево','translate(12 12) skewX(-13) translate(-12 -12)')
+          ]
+          def render(d, transform=None):
+            inner=('<g transform="'+transform+'"><path d="'+d+'"/></g>') if transform else ('<path d="'+d+'"/>')
+            return '<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="-2 -2 28 28"><g fill="#171e2d">'+inner+'</g></svg>'
+          cards=[]
+          skipped=[]
+          for sector,raw in pools.items():
+            count=0
+            for item in raw.split(','):
+              if count==20: break
+              name,slug=item.split('|')
+              f=source/(slug+'.svg')
+              if not f.exists(): skipped.append(slug); continue
+              rawsvg=f.read_text(encoding='utf-8')
+              match=re.search(r'<path\b[^>]*\bd="([^"]+)"',rawsvg)
+              if not match: skipped.append(slug); continue
+              d=match.group(1)
+              idx=len(cards)
+              original=render(d)
+              bad=render(d,edits[idx%len(edits)][1])
+              correct='left' if idx%2==0 else 'right'
+              opaque=hashlib.sha256(slug.encode()).hexdigest()[:12]
+              left='assets/'+opaque+'_a.svg'
+              right='assets/'+opaque+'_b.svg'
+              (out/left).write_text(original if correct=='left' else bad,encoding='utf-8')
+              (out/right).write_text(original if correct=='right' else bad,encoding='utf-8')
+              cards.append({'id':'L100_'+str(idx+1).zfill(3),'brand':name,'slug':slug,'sector':sector,'difficulty':'hard' if idx%5==0 else 'medium' if idx%3==0 else 'easy','question':'Какой логотип нарисован без ошибки?','submode':'logo_spot_the_correct_one','left':left,'right':right,'correct_side':correct,'error_explanation':edits[idx%len(edits)][0],'source':'simple-icons@16.38.0','source_url':'https://github.com/simple-icons/simple-icons/blob/v16.38.0/icons/'+slug+'.svg','verified':'source imported; altered automatically; human QA pending'})
+              count+=1
+            if count!=20: raise RuntimeError('Only '+str(count)+' logos found in '+sector)
+          if len(cards)!=100: raise RuntimeError('Expected 100 cards')
+          (out/'cards.json').write_text(json.dumps({'schema':'logo-visual-qa-1','cards':cards,'skipped':skipped},indent=2,ensure_ascii=False),encoding='utf-8')
+          keys=['id','brand','sector','difficulty','left','right','correct_side','error_explanation','source_url','verified']
+          with (out/'cards.csv').open('w',encoding='utf-8-sig',newline='') as f:
+            w=csv.DictWriter(f,fieldnames=keys,extrasaction='ignore');w.writeheader();w.writerows(cards)
+          (out/'README.txt').write_text('SBORISHCHE: 100 brand icons, 200 SVG. Based on independent Simple Icons 16.38.0. Incorrect variants use geometric transforms. Manual verification required. Trademarks belong to owners. Static QA content only; not embedded in APK.',encoding='utf-8')
+          assert len(list(assets.glob('*.svg')))==200
+          print('BUILT',len(cards),'CARDS,',len(list(assets.glob('*.svg'))),'SVG, SKIPPED',len(skipped),skipped)
+          PY
+      - name: Upload logo visual pack
+        uses: actions/upload-artifact@v4
+        with:
+          name: SBORISHCHE-LOGO-100-VISUALS
+          path: release/LOGOS_100/**
+          retention-days: 30
+          if-no-files-found: error
