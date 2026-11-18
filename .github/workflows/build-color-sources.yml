@@ -1,0 +1,40 @@
+name: Fetch genuine multicolor logo sources
+on:
+  push:
+    branches:
+      - sborishche-color-logos-v4-4
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source-icons:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Download public icon source collections
+        run: npm install --no-save --ignore-scripts @iconify-json/logos @iconify-json/flat-color-icons simple-icons@16.38.0
+      - name: Audit source collections and copy datasets
+        run: |
+          mkdir -p source-datasets
+          cp node_modules/@iconify-json/logos/icons.json source-datasets/logos.json
+          cp node_modules/@iconify-json/logos/info.json source-datasets/logos-info.json
+          cp node_modules/@iconify-json/flat-color-icons/icons.json source-datasets/flat-color-icons.json
+          cp node_modules/@iconify-json/flat-color-icons/info.json source-datasets/flat-color-info.json
+          cp node_modules/simple-icons/_data/simple-icons.json source-datasets/simple-icons-colors.json || true
+          node - <<'JS'
+          const fs=require('fs'),data=require('./source-datasets/logos.json');
+          const names=Object.keys(data.icons||{});
+          console.log('LOGOS ICON COUNT',names.length,'EXAMPLES',names.slice(0,50));
+          console.log('COLORFUL SAMPLE',data.icons['google']?.body?.slice(0,200));
+          fs.writeFileSync('source-datasets/available-names.json',JSON.stringify({names}));
+          JS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: SBORISHCHE-COLOR-LOGOS-SOURCE-ICONS
+          path: source-datasets/**
+          retention-days: 30
+          if-no-files-found: error
